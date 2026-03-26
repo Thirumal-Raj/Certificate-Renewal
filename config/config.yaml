@@ -1,0 +1,28 @@
+# Certificate Renewal Configuration
+app:
+  name: Certificate Renewal
+  version: 1.0.0
+
+gmail:
+  email: autopilot.ai26@gmail.com
+  # Set GMAIL_APP_PASSWORD env var — do NOT hardcode your password here
+  imap_host: imap.gmail.com
+  imap_port: 993
+
+  # Email search filters
+  search:
+    folder: INBOX
+    # Filter by subject keyword (leave empty to fetch all)
+    subject_filter: ""
+    # Only fetch unread emails (true/false)
+    unread_only: false
+    # Max emails to process per run
+    max_emails: 20
+
+  # Attachment settings
+  attachments:
+    download_dir: downloads/attachments
+    # Leave empty to download all types, or specify e.g. ["pdf", "crt", "pem", "p12", "pfx"]
+    allowed_extensions: []
+    # Skip attachments larger than this (MB), 0 = no limit
+    max_size_mb: 25

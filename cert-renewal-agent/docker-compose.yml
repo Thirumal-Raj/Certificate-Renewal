@@ -1,0 +1,15 @@
+services:
+  openas2:
+    image: openas2/openas2:latest
+    container_name: openas2
+    ports:
+      - "10080:10080"   # HTTP AS2 receiver
+      - "10443:10443"   # HTTPS AS2 receiver
+      - "10081:10081"   # Admin web UI (if enabled)
+    volumes:
+      - ./openas2-config:/opt/OpenAS2/config
+      - ./openas2-logs:/opt/OpenAS2/logs
+      - ./downloads/certs:/opt/OpenAS2/data/inbox   # inbound files land here
+    environment:
+      - JAVA_OPTS=-Xmx256m
+    restart: unless-stopped
