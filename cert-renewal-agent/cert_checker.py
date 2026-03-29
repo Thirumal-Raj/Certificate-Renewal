@@ -27,6 +27,8 @@ class CertChecker:
             cert = self._load_pkcs12(data)
         elif ext == "der":
             cert = self._load_der(data)
+        elif ext == "cer":
+            cert = self._load_cer(data)
         else:
             cert = self._load_pem_or_der(data)
 
@@ -77,6 +79,20 @@ class CertChecker:
             return x509.load_der_x509_certificate(data)
         except Exception:
             return None
+
+    def _load_cer(self, data: bytes):
+        """Load a .cer file — tries DER first (most common), then PEM."""
+        try:
+            from cryptography import x509
+            try:
+                return x509.load_der_x509_certificate(data)
+            except Exception:
+                pass
+            if b"-----BEGIN" in data:
+                return x509.load_pem_x509_certificate(data)
+        except Exception:
+            pass
+        return None
 
     def _load_der(self, data: bytes):
         try:

@@ -65,6 +65,13 @@ class LocalCertStore:
         log.info(f"[local-store] (In production this would be pushed to OpenAS2 at {partner_name})")
         return True
 
+    def get_known_as2_ids(self) -> dict:
+        """
+        Return {partner_name: as2_id} from the local registry.
+        Since the local store has no real AS2 server, partner_name is used as the as2_id.
+        """
+        return {name: name for name in self._registry}
+
     def reload_config(self) -> bool:
         """Simulated reload — just logs what would happen."""
         log.info("[local-store] Config reload simulated (no AS2 server running).")

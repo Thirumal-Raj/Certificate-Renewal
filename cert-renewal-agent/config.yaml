@@ -1,7 +1,7 @@
 app:
   name: Certificate Renewal Agent
   version: 1.0.0
-  cert_expiry_warn_days: 30
+  cert_expiry_warn_days: 999
 
 gmail:
   email: autopilot.ai26@gmail.com
@@ -20,7 +20,7 @@ gmail:
 as2:
   # mode: local    → no server needed, stores certs in as2_local_store/ (default)
   # mode: openas2  → connects to a running OpenAS2 server (requires Docker or install)
-  mode: local
+  mode: openas2
   partner:
     name: "OpenAS2A"
     as2_id: "OpenAS2A"
@@ -28,13 +28,14 @@ as2:
   # --- OpenAS2 server settings (only used when mode: openas2) ---
   host: localhost
   port: 10080
-  api_enabled: false
-  api_base_url: "http://localhost:10080/api"
-  api_username: "admin"
-  config_dir: "./openas2-config"
+  api_enabled: true
+  api_base_url: "http://localhost:8080/api"
+  api_username: "userID"
+  api_password: "pWd"
+  config_dir: "/Users/thirumalraj/downloads/OpenAS2Server-4.8.0/config"
   partners_file: "partnerships.xml"
-  keystore_path: "./openas2-config/as2_certs.p12"
-  keystore_password: "changeit"
+  keystore_path: "/Users/thirumalraj/downloads/OpenAS2Server-4.8.0/config/as2_certs.p12"
+  keystore_password: "testas2"
 
 # Local cert store (used when as2.mode: local)
 local_cert_store:

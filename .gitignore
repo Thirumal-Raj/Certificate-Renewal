@@ -4,3 +4,11 @@ __pycache__/
 *.log
 .DS_Store
 downloads/
+
+# Secrets & runtime — never commit
+run_agent.sh
+*.p12
+*.jks
+seen_emails.json
+as2_local_store/
+credentials.json

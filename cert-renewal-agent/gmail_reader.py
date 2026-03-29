@@ -12,8 +12,12 @@ Setup:
 import email
 import imaplib
 import os
+import re
+import socket
 from email.header import decode_header
 from pathlib import Path
+
+_IMAP_TIMEOUT_SECS = 30
 
 
 def _decode_header_value(value: str) -> str:
@@ -30,6 +34,36 @@ def _decode_header_value(value: str) -> str:
 def _safe_filename(name: str) -> str:
     keepchars = (" ", ".", "_", "-")
     return "".join(c for c in name if c.isalnum() or c in keepchars).rstrip()
+
+
+def _extract_body_text(msg) -> str:
+    """Return plain-text body parts joined together."""
+    parts = []
+    for part in msg.walk():
+        if (part.get_content_type() == "text/plain"
+                and "attachment" not in part.get("Content-Disposition", "")):
+            payload = part.get_payload(decode=True)
+            if payload:
+                charset = part.get_content_charset() or "utf-8"
+                parts.append(payload.decode(charset, errors="replace"))
+    return "\n".join(parts)
+
+
+def _extract_as2_id(body: str):
+    """
+    Parse AS2 ID from email body.
+    Matches patterns like:
+      AS2 ID: OpenAS2A_OID
+      AS2ID=PartnerA_OID
+      as2_id : PartnerB_OID
+    Returns the value or None if not found.
+    """
+    match = re.search(
+        r'AS2[-_\s]?ID\s*[:=\-]\s*([A-Za-z0-9_\-\.]+)',
+        body,
+        re.IGNORECASE,
+    )
+    return match.group(1).strip() if match else None
 
 
 class GmailReader:
@@ -61,7 +95,10 @@ class GmailReader:
                 "Generate one at: myaccount.google.com/apppasswords"
             )
         print(f"[gmail] Connecting to {self.imap_host}:{self.imap_port} …")
-        self._imap = imaplib.IMAP4_SSL(self.imap_host, self.imap_port)
+        self._imap = imaplib.IMAP4_SSL(
+            self.imap_host, self.imap_port,
+            timeout=_IMAP_TIMEOUT_SECS,
+        )
         try:
             self._imap.login(self.email_address, self.app_password)
         except imaplib.IMAP4.error as e:
@@ -114,19 +151,34 @@ class GmailReader:
             return False
         return True
 
-    def download_attachments_from_message(self, msg_id: bytes) -> list:
+    def download_attachments_from_message(self, msg_id: bytes) -> tuple:
+        """
+        Returns (saved_paths, as2_id, message_id) where:
+          saved_paths — list of Path objects for downloaded attachments
+          as2_id      — AS2 ID extracted from the email body, or None
+          message_id  — RFC 2822 Message-ID header value (stable unique ID)
+        """
         assert self._imap
         status, data = self._imap.fetch(msg_id, "(RFC822)")
         if status != "OK":
-            return []
+            return [], None, None
 
         raw = data[0][1]
         msg = email.message_from_bytes(raw)
 
+        message_id = msg.get("Message-ID", "").strip()
         subject = _decode_header_value(msg.get("Subject", "(no subject)"))
         sender = _decode_header_value(msg.get("From", "unknown"))
         print(f"\n[email] From: {sender}")
         print(f"        Subject: {subject}")
+        print(f"        Message-ID: {message_id or '(none)'}")
+
+        body = _extract_body_text(msg)
+        as2_id = _extract_as2_id(body)
+        if as2_id:
+            print(f"        AS2 ID (from body): {as2_id}")
+        else:
+            print("        AS2 ID (from body): not found")
 
         saved = []
         for part in msg.walk():
@@ -159,17 +211,34 @@ class GmailReader:
 
         if not saved:
             print("  [info] No certificate attachments in this email.")
-        return saved
+        return saved, as2_id, message_id
 
-    def run(self) -> list:
+    def run(self, seen_ids: set = None) -> tuple:
+        """
+        Fetch new emails not present in seen_ids.
+
+        Returns (downloads, new_seen_ids) where:
+          downloads     — list of dicts: [{"path": Path, "as2_id": str|None, "message_id": str}, ...]
+          new_seen_ids  — set of Message-IDs that were processed this run (to be saved by caller)
+        """
+        if seen_ids is None:
+            seen_ids = set()
+
         self.connect()
         all_saved = []
+        new_seen_ids = set()
         try:
             ids = self.fetch_email_ids()
             for msg_id in ids:
-                saved = self.download_attachments_from_message(msg_id)
-                all_saved.extend(saved)
+                paths, as2_id, message_id = self.download_attachments_from_message(msg_id)
+                if message_id and message_id in seen_ids:
+                    print(f"  [skip] Already processed — Message-ID: {message_id}")
+                    continue
+                if message_id:
+                    new_seen_ids.add(message_id)
+                for p in paths:
+                    all_saved.append({"path": p, "as2_id": as2_id, "message_id": message_id})
         finally:
             self.disconnect()
-        print(f"\n[gmail] Done. {len(all_saved)} cert attachment(s) in '{self.download_dir}'.")
-        return all_saved
+        print(f"\n[gmail] Done. {len(all_saved)} new cert attachment(s) in '{self.download_dir}'.")
+        return all_saved, new_seen_ids
